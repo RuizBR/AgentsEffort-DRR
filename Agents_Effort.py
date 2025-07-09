@@ -1,12 +1,6 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from openpyxl.styles import PatternFill, Font, Alignment
-
-# Define header style: black fill, white text, bold, centered
-header_fill = PatternFill(start_color="000000", end_color="000000", fill_type="solid")
-header_font = Font(color="FFFFFF", bold=True)
-header_align = Alignment(horizontal="center", vertical="center")
 
 st.title("📄 Daily Efforts per Agent")
 
@@ -51,7 +45,7 @@ if uploaded_file:
             st.markdown(f"🔎 **Filtered rows for `{selected_remark_by}`: {len(filtered_df)}**")
             st.dataframe(filtered_df.head())
 
-            # Define filter conditions
+            # Define filter conditions for sheets
             sheets = {
                 "Bank Escalation": filtered_df[filtered_df[status_col].str.contains("BANK ESCALATION", na=False, case=False)],
                 "PTP": filtered_df[filtered_df[status_col].str.contains("PTP", na=False, case=False) & ~filtered_df[status_col].str.contains("PTP FF UP", na=False, case=False)],
@@ -68,7 +62,7 @@ if uploaded_file:
                 for sheet_name, sheet_df in sheets.items():
                     st.markdown(f"📄 `{sheet_name}`: {len(sheet_df)} rows")
                     if not sheet_df.empty:
-                        # Clean balance in each sub-sheet
+                        # Clean balance
                         sheet_df[balance_col] = (
                             sheet_df[balance_col]
                             .astype(str)
@@ -80,16 +74,6 @@ if uploaded_file:
                         # Reorder and write
                         output_df = sheet_df.reindex(columns=standard_columns, fill_value="")
                         output_df.to_excel(writer, sheet_name=sheet_name[:31], index=False)
-                        ws = writer.sheets[sheet_name[:31]]
-
-                        # Style header
-                        for col_idx in range(1, len(output_df.columns) + 1):
-                            cell = ws.cell(row=1, column=col_idx)
-                            cell.fill = header_fill
-                            cell.font = header_font
-                            cell.alignment = header_align
-
-                        # No more auto-fit here (get_column_letter removed)
 
                         # Create pivot
                         pivot = sheet_df.groupby(["cycle", status_col], dropna=False).agg(
@@ -101,31 +85,25 @@ if uploaded_file:
                         pivot = pivot[["category", "cycle", status_col, "count", "total_balance"]]
                         all_pivot_data.append(pivot)
 
-                # Write pivot summary
+                # Write all pivots to Summary sheet
                 summary_ws = writer.book.create_sheet("Summary")
                 start_row = 1
 
                 for pivot_df in all_pivot_data:
                     category = pivot_df["category"].iloc[0]
-
                     summary_ws.cell(row=start_row, column=1, value=f"{category} Summary")
                     start_row += 1
 
                     for col_idx, col_name in enumerate(pivot_df.columns, 1):
-                        cell = summary_ws.cell(row=start_row, column=col_idx, value=col_name)
-                        cell.fill = header_fill
-                        cell.font = header_font
-                        cell.alignment = header_align
+                        summary_ws.cell(row=start_row, column=col_idx, value=col_name)
 
                     for row_idx, row in pivot_df.iterrows():
                         for col_idx, value in enumerate(row, 1):
                             summary_ws.cell(row=start_row + 1 + row_idx, column=col_idx, value=value)
 
-                    # No auto-fit logic for Summary
-
                     start_row += len(pivot_df) + 4
 
-            st.success("✅ Excel file with styled headers and summary is ready!")
+            st.success("✅ Excel file is ready!")
             st.download_button(
                 label="📥 Download Filtered Excel File",
                 data=output.getvalue(),
